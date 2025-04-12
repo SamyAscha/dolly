@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.97"
+pest = "2.8.0"
+pest_derive = "2.8.0"
+petgraph = "0.8.1"

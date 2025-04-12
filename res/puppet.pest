@@ -1,0 +1,20 @@
+program = { SOI ~ (resource | relation)* ~ EOI }
+resource = { rtype ~ "{" ~ title ~ ":" ~ attributes? ~ "}" }
+rtype = { ident }
+title = { quoted_string }
+attributes = { attribute ~ ("," ~ attribute)* ~ ","? }
+attribute = { attr_name ~ "=>" ~ attr_value }
+attr_name = { ident }
+attr_value = { quoted_string | ident }
+relation = { ref_list ~ rel_op ~ ref_list ~ (rel_op ~ ref_list)* }
+ref_list = { "[" ~ resource_ref ~ ("," ~ resource_ref)* ~ "]" }
+resource_ref = { rtype ~ "[" ~ quoted_string ~ "]" }
+rel_op = { "->" | "~>" | "<-" | "<~" }
+ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+quoted_string = { single_quoted | double_quoted }
+single_quoted = { "'" ~ (!"'" ~ ANY)* ~ "'" }
+double_quoted = { "\"" ~ (double_quoted_content)* ~ "\"" }
+double_quoted_content = { variable | plain }
+plain = { (!"\"" ~ !"${" ~ ANY)+ }
+variable = { "${" ~ ident ~ "}" }
+WHITESPACE = _{ " " | "\n" | "\t" }

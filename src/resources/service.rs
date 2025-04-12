@@ -1,11 +1,11 @@
 use super::resource::{Ensure, Resource};
 
 #[derive(Debug)]
-pub struct Exec {
+pub struct Service {
     pub title: String,
 }
 
-impl Exec {
+impl Service {
     fn ensure_present(&self) {
         println!("Ensure present: {}", self.title);
     }
@@ -14,9 +14,9 @@ impl Exec {
     }
 }
 
-impl Resource for Exec {
+impl Resource for Service {
     fn rtype(&self) -> &str {
-        "exec"
+        "service"
     }
 
     fn title(&self) -> String {

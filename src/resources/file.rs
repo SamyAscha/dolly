@@ -1,5 +1,6 @@
 use super::resource::{Ensure, Resource};
 
+#[derive(Debug)]
 pub struct File {
     pub title: String,
 }
@@ -14,6 +15,10 @@ impl File {
 }
 
 impl Resource for File {
+    fn rtype(&self) -> &str {
+        "file"
+    }
+
     fn title(&self) -> String {
         self.title.clone()
     }
