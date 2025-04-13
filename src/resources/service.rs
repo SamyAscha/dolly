@@ -1,6 +1,6 @@
 use super::resource::{Ensure, Resource};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Service {
     pub title: String,
 }

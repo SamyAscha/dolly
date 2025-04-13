@@ -149,6 +149,15 @@ impl Manifest {
     }
 }
 
+impl Display for Manifest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for expr in self.0.iter() {
+            writeln!(f, "{}", expr)?;
+        }
+        Ok(())
+    }
+}
+
 impl FromStr for Manifest {
     type Err = anyhow::Error;
 
@@ -177,12 +186,10 @@ impl FromStr for Manifest {
                                 rtype = inner.as_str().to_string();
                             }
                             Rule::title => {
-                                println!("Title pair: {}", inner);
                                 for tp in inner.into_inner() {
                                     match tp.as_rule() {
                                         Rule::quoted_string => {
                                             title = parse_quoted_string(tp)?;
-                                            println!("Title value: {}", title);
                                         }
                                         no_match => {
                                             println!("Nothing matches on: {no_match:#?}");
@@ -193,28 +200,20 @@ impl FromStr for Manifest {
                             Rule::attributes => {
                                 let mut attr_name = String::new();
                                 let mut attr_value = PuppetString::new();
-                                println!("Attributes pair: {}", inner);
                                 for attr_pair in inner.into_inner() {
-                                    println!("Attribute pair: {}", attr_pair);
                                     match attr_pair.as_rule() {
                                         Rule::attribute => {
                                             for ap in attr_pair.into_inner() {
                                                 match ap.as_rule() {
                                                     Rule::attr_name => {
                                                         attr_name = ap.as_str().to_string();
-                                                        println!("Attr name: {}", attr_name);
                                                     }
                                                     Rule::attr_value => {
-                                                        println!("Attr pair (value): {}", ap);
                                                         for avp in ap.into_inner() {
                                                             match avp.as_rule() {
                                                                 Rule::quoted_string => {
                                                                     attr_value =
                                                                         parse_quoted_string(avp)?;
-                                                                    println!(
-                                                                        "Attr value: {}",
-                                                                        attr_value
-                                                                    );
                                                                 }
                                                                 no_match => {
                                                                     println!(
@@ -264,30 +263,70 @@ impl FromStr for Manifest {
 
                     for inner in pair.into_inner() {
                         match inner.as_rule() {
-                            Rule::ref_list => {
-                                let mut refs = Vec::new();
-                                for ref_pair in inner.into_inner() {
-                                    if ref_pair.as_rule() == Rule::resource_ref {
-                                        let mut ref_rtype = String::new();
-                                        let mut ref_title = PuppetString::new();
-                                        for ref_inner in ref_pair.into_inner() {
-                                            match ref_inner.as_rule() {
-                                                Rule::rtype => {
-                                                    ref_rtype = ref_inner.as_str().to_lowercase();
+                            Rule::ref_arg => {
+                                for rl_rr in inner.into_inner() {
+                                    match rl_rr.as_rule() {
+                                        Rule::resource_ref => {
+                                            let mut ref_rtype = String::new();
+                                            let mut ref_title = PuppetString::new();
+                                            for ref_inner in rl_rr.into_inner() {
+                                                match ref_inner.as_rule() {
+                                                    Rule::rtype => {
+                                                        ref_rtype =
+                                                            ref_inner.as_str().to_lowercase();
+                                                    }
+                                                    Rule::quoted_string => {
+                                                        ref_title = parse_quoted_string(ref_inner)?;
+                                                    }
+                                                    no_match => {
+                                                        println!(
+                                                            "ref_list: Nothing matches on: {no_match:#?}"
+                                                        );
+                                                    }
                                                 }
-                                                Rule::quoted_string => {
-                                                    ref_title = parse_quoted_string(ref_inner)?;
-                                                }
-                                                _ => {}
                                             }
+                                            current_refs.push(ResourceRef {
+                                                rtype: ref_rtype,
+                                                title: ref_title,
+                                            });
                                         }
-                                        refs.push(ResourceRef {
-                                            rtype: ref_rtype,
-                                            title: ref_title,
-                                        });
+                                        Rule::ref_list => {
+                                            let mut refs = Vec::new();
+                                            for ref_pair in rl_rr.into_inner() {
+                                                if ref_pair.as_rule() == Rule::resource_ref {
+                                                    let mut ref_rtype = String::new();
+                                                    let mut ref_title = PuppetString::new();
+                                                    for ref_inner in ref_pair.into_inner() {
+                                                        match ref_inner.as_rule() {
+                                                            Rule::rtype => {
+                                                                ref_rtype = ref_inner
+                                                                    .as_str()
+                                                                    .to_lowercase();
+                                                            }
+                                                            Rule::quoted_string => {
+                                                                ref_title =
+                                                                    parse_quoted_string(ref_inner)?;
+                                                            }
+                                                            no_match => {
+                                                                println!(
+                                                                    "ref_list: Nothing matches on: {no_match:#?}"
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                    refs.push(ResourceRef {
+                                                        rtype: ref_rtype,
+                                                        title: ref_title,
+                                                    });
+                                                }
+                                            }
+                                            current_refs = refs;
+                                        }
+                                        no_match => {
+                                            println!("rel_op: Nothing matches on: {no_match:#?}");
+                                        }
                                     }
                                 }
-                                current_refs = refs;
                             }
                             Rule::rel_op => {
                                 if !current_refs.is_empty() {
@@ -297,7 +336,7 @@ impl FromStr for Manifest {
                                 }
                             }
                             no_match => {
-                                println!("Nothing matches on: {no_match:#?}");
+                                println!("rel_op: Nothing matches on: {no_match:#?}");
                             }
                         }
                     }
@@ -332,8 +371,6 @@ impl FromStr for Manifest {
                 }
             }
         }
-
-        println!("{expressions:#?}");
 
         // Second pass: Validate references
         for expr in &expressions {

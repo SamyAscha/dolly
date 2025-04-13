@@ -24,4 +24,5 @@ service { 'ssh':
 exec { "/root/${scripts}/yo.sh": }
 
 File['/tmp/two'] -> [File['/tmp/two/three'], File['/tmp/two/four']] ~> Service['nginx']
-[Service['ssh']] <~ [File['/tmp/one']]
+
+Service['ssh'] <~ File['/tmp/one'] <- Exec["/root/${scripts}/yo.sh"]
