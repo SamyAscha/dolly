@@ -30,12 +30,9 @@ impl TryFrom<&PuppetExpr> for Box<dyn Resource> {
                 "Service" => Ok(Box::new(Service {
                     title: title.to_string(),
                 })),
-                "Foo::Bar" => {
-                    eprintln!("From PuppetExpr to Foo::Bar");
-                    Ok(Box::new(FooBar {
-                        title: title.to_string(),
-                    }))
-                }
+                "Foo::Bar" => Ok(Box::new(FooBar {
+                    title: title.to_string(),
+                })),
                 no_match => Err(anyhow!("unknown rtype: {no_match}")),
             },
             PuppetExpr::Relation { .. } => {

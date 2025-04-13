@@ -103,7 +103,6 @@ pub struct ResourceRef {
 
 impl ResourceRef {
     pub fn id(&self) -> String {
-        println!("Ref id rtype: {:?}", self.rtype);
         format!("{}[{}]", self.rtype, self.title)
     }
 }
@@ -116,14 +115,12 @@ impl Display for ResourceRef {
 
 impl Hash for ResourceRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        println!("Hasher id: {}", self.id());
         self.id().hash(state);
     }
 }
 
 impl PartialEq for ResourceRef {
     fn eq(&self, other: &Self) -> bool {
-        println!("Eq id: {} == {}", self.id(), other.id());
         self.id() == other.id()
     }
 }
@@ -235,15 +232,12 @@ impl FromStr for Manifest {
         for pair in program.into_inner() {
             match pair.as_rule() {
                 Rule::resource => {
-                    eprintln!("Resource pair: {pair:?}");
                     let expr = parse_resource(pair)?;
-                    eprintln!("Resource expr: {expr:?}");
                     if let PuppetExpr::Resource { rtype, title, .. } = &expr {
                         let resource_ref = ResourceRef {
                             rtype: rtype.to_string(),
                             title: PuppetString(title.0.clone()),
                         };
-                        eprintln!("Resource ref: {expr}");
                         resources.insert(resource_ref, ());
                     }
                     expressions.push(expr);
@@ -378,7 +372,6 @@ fn parse_ref_arg(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ResourceRef>> 
             _ => {}
         }
     }
-    println!("Parsed refs: {refs:?}");
     Ok(refs)
 }
 
@@ -419,7 +412,6 @@ fn validate_references(
     expressions: &[PuppetExpr],
     resources: &HashMap<ResourceRef, ()>,
 ) -> Result<()> {
-    eprintln!("Validate resource refs: {resources:?}");
     for expr in expressions {
         if let PuppetExpr::Relation { from, to, .. } = expr {
             for r in from.iter().chain(to.iter()) {

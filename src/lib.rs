@@ -50,7 +50,6 @@ pub fn parse_puppet_manifest(manifest: &Manifest) -> Result<Plan> {
         let resource_node: Box<dyn Resource> = resource.try_into()?;
         let id = resource_node.id();
         resource_nodes.insert(id.clone(), acyclic.add_node(resource_node));
-        eprintln!("Insert resource node: {}", id);
     }
 
     let mut acyclic =
