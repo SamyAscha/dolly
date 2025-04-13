@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use pest::Parser;
 use pest_derive::Parser;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display};
@@ -80,7 +81,7 @@ impl fmt::Display for PuppetString {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum StringContent {
-    Literal(String),
+    Literal(Cow<'static, str>),
     Variable(String),
 }
 
@@ -403,7 +404,7 @@ fn parse_quoted_string(pair: pest::iterators::Pair<Rule>) -> Result<PuppetString
         match inner.as_rule() {
             Rule::single_quoted => {
                 content.push(StringContent::Literal(
-                    inner.as_str().trim_matches('\'').to_string(),
+                    inner.as_str().trim_matches('\'').to_string().into(),
                 ));
             }
             Rule::double_quoted => {
@@ -420,7 +421,7 @@ fn parse_quoted_string(pair: pest::iterators::Pair<Rule>) -> Result<PuppetString
                                 }
                                 Rule::plain => {
                                     content.push(StringContent::Literal(
-                                        inner_content.as_str().to_string(),
+                                        inner_content.as_str().to_string().into(),
                                     ));
                                 }
                                 _ => {}
