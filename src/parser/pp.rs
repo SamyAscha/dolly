@@ -341,27 +341,20 @@ impl FromStr for Manifest {
                         }
                     }
 
-                    // Add the final ref_list
-                    if !current_refs.is_empty() && !relation_parts.is_empty() {
-                        let mut from = relation_parts[0].0.clone();
-                        let mut last_to = relation_parts[0].0.clone();
+                    // Add the final ref_arg
+                    if !current_refs.is_empty() {
+                        relation_parts.push((current_refs.clone(), "".to_string())); // Dummy op for last refs
+                    }
 
-                        for (i, (_refs, op)) in relation_parts.iter().enumerate() {
-                            let to = if i + 1 < relation_parts.len() {
-                                relation_parts[i + 1].0.clone()
-                            } else {
-                                current_refs.clone()
-                            };
-
-                            if i > 0 {
-                                from = last_to;
-                            }
-                            last_to = to.clone();
-
+                    // Create relations from consecutive ref_args
+                    for i in 0..relation_parts.len().saturating_sub(1) {
+                        let (from, op_str) = &relation_parts[i];
+                        let (to, _) = &relation_parts[i + 1];
+                        if !op_str.is_empty() {
                             expressions.push(PuppetExpr::Relation {
                                 from: from.clone(),
-                                to,
-                                op: op.parse()?,
+                                to: to.clone(),
+                                op: op_str.parse()?,
                             });
                         }
                     }

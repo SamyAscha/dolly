@@ -480,8 +480,8 @@ mod tests {
         let manifest = Manifest::from_str(input)?;
         assert_eq!(
             manifest.0.len(),
-            10,
-            "Should have 7 resources and 3 relations"
+            11,
+            "Should have 7 resources and 4 relations"
         );
 
         let resources: Vec<_> = manifest.resources().collect();
@@ -505,7 +505,7 @@ mod tests {
         assert!(resource_ids.contains(&"exec[/root/${scripts}/yo.sh]".to_string()));
 
         let relations: Vec<_> = manifest.relations().collect();
-        assert_eq!(relations.len(), 3, "Should have 3 relations");
+        assert_eq!(relations.len(), 4, "Should have 4 relations");
 
         let plan = parse_puppet_manifest(&manifest)?;
         assert_eq!(
@@ -515,8 +515,8 @@ mod tests {
         );
         assert_eq!(
             plan.plan().inner().edge_count(),
-            5,
-            "Plan should have 5 edges"
+            6,
+            "Plan should have 6 edges"
         );
 
         Ok(())
