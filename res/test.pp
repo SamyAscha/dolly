@@ -1,3 +1,4 @@
+foo::bar { 'yo': }
 file { '/tmp/one':
   mode    => '0644',
   content => "bi${loo}ba",
@@ -26,3 +27,5 @@ exec { "/root/${scripts}/yo.sh": }
 File['/tmp/two'] -> [File['/tmp/two/three'], File['/tmp/two/four']] ~> Service['nginx']
 
 Service['ssh'] <~ File['/tmp/one'] <- Exec["/root/${scripts}/yo.sh"]
+
+Foo::Bar['yo'] ~> Service['ssh']

@@ -95,7 +95,7 @@ impl fmt::Display for StringContent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ResourceRef {
     pub rtype: String,
     pub title: PuppetString,
@@ -103,6 +103,7 @@ pub struct ResourceRef {
 
 impl ResourceRef {
     pub fn id(&self) -> String {
+        println!("Ref id rtype: {:?}", self.rtype);
         format!("{}[{}]", self.rtype, self.title)
     }
 }
@@ -115,9 +116,19 @@ impl Display for ResourceRef {
 
 impl Hash for ResourceRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        println!("Hasher id: {}", self.id());
         self.id().hash(state);
     }
 }
+
+impl PartialEq for ResourceRef {
+    fn eq(&self, other: &Self) -> bool {
+        println!("Eq id: {} == {}", self.id(), other.id());
+        self.id() == other.id()
+    }
+}
+
+impl Eq for ResourceRef {}
 
 #[derive(Debug)]
 pub struct Attribute {
@@ -224,12 +235,15 @@ impl FromStr for Manifest {
         for pair in program.into_inner() {
             match pair.as_rule() {
                 Rule::resource => {
+                    eprintln!("Resource pair: {pair:?}");
                     let expr = parse_resource(pair)?;
+                    eprintln!("Resource expr: {expr:?}");
                     if let PuppetExpr::Resource { rtype, title, .. } = &expr {
                         let resource_ref = ResourceRef {
-                            rtype: to_uc_first(rtype),
+                            rtype: rtype.to_string(),
                             title: PuppetString(title.0.clone()),
                         };
+                        eprintln!("Resource ref: {expr}");
                         resources.insert(resource_ref, ());
                     }
                     expressions.push(expr);
@@ -254,7 +268,7 @@ fn parse_resource(pair: pest::iterators::Pair<Rule>) -> Result<PuppetExpr> {
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::rtype => {
-                rtype = to_uc_first(inner.as_str());
+                rtype = parse_rtype(inner)?;
             }
             Rule::title => {
                 title = parse_quoted_string(inner.into_inner().next().ok_or_else(|| {
@@ -364,6 +378,7 @@ fn parse_ref_arg(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ResourceRef>> 
             _ => {}
         }
     }
+    println!("Parsed refs: {refs:?}");
     Ok(refs)
 }
 
@@ -373,7 +388,7 @@ fn parse_resource_ref(pair: pest::iterators::Pair<Rule>) -> Result<ResourceRef> 
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::ref_rtype => {
-                rtype = inner.as_str().to_string();
+                rtype = parse_rtype(inner)?;
             }
             Rule::quoted_string => {
                 title = parse_quoted_string(inner)?;
@@ -384,14 +399,30 @@ fn parse_resource_ref(pair: pest::iterators::Pair<Rule>) -> Result<ResourceRef> 
     Ok(ResourceRef { rtype, title })
 }
 
+fn parse_rtype(pair: pest::iterators::Pair<Rule>) -> Result<String> {
+    let mut rtype = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ident | Rule::uc_ident => {
+                return Ok(to_uc_first(inner.as_str()));
+            }
+            Rule::namespaced_ident | Rule::uc_namespaced_ident => {
+                rtype = to_uc_first_namespaced(inner);
+            }
+            no_match => return Err(anyhow!("unknown rtype: {no_match:?}")),
+        };
+    }
+    Ok(to_uc_first(&rtype))
+}
+
 fn validate_references(
     expressions: &[PuppetExpr],
     resources: &HashMap<ResourceRef, ()>,
 ) -> Result<()> {
+    eprintln!("Validate resource refs: {resources:?}");
     for expr in expressions {
         if let PuppetExpr::Relation { from, to, .. } = expr {
             for r in from.iter().chain(to.iter()) {
-                eprintln!("Key: {r:#?}");
                 if !resources.contains_key(r) {
                     return Err(anyhow!(PuppetError {
                         message: format!("Undefined resource reference: {}", r.id()),
@@ -445,6 +476,19 @@ fn to_uc_first(s: &str) -> String {
     s.split("::")
         .map(|part| {
             let mut chars = part.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("::")
+}
+
+fn to_uc_first_namespaced(pair: pest::iterators::Pair<Rule>) -> String {
+    pair.into_inner()
+        .map(|part| {
+            let mut chars = part.as_str().chars();
             match chars.next() {
                 None => String::new(),
                 Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),

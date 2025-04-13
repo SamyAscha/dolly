@@ -420,25 +420,25 @@ mod tests {
     #[test]
     fn test_whitespace_variations() -> Result<()> {
         let input = r#"
-            file { "/tmp/one" : } service { "nginx" : } File [ "/tmp/one" ] -> Service [ "nginx" ]
+            file  { "/tmp/one" : } file{ "/tmp/two" : } foo::bar  { "/tmp/two" : } service { "nginx" : } [File [ "/tmp/one" ], Foo::Bar [ "/tmp/two" ]] -> Service  [ "nginx" ]
         "#;
         let manifest = Manifest::from_str(input)?;
         assert_eq!(
             manifest.0.len(),
-            3,
-            "Should have two resources and one relation"
+            5,
+            "Should have 3 resources and 2 relations"
         );
 
         let plan = parse_puppet_manifest(&manifest)?;
         assert_eq!(
             plan.plan().inner().node_count(),
-            2,
-            "Plan should have two nodes"
+            4,
+            "Plan should have 4 nodes"
         );
         assert_eq!(
             plan.plan().inner().edge_count(),
-            1,
-            "Plan should have one edge"
+            2,
+            "Plan should have 2 edges"
         );
         Ok(())
     }
@@ -488,12 +488,12 @@ mod tests {
         let manifest = Manifest::from_str(input)?;
         assert_eq!(
             manifest.0.len(),
-            11,
-            "Should have 7 resources and 4 relations"
+            13,
+            "Should have 8 resources and 5 relations"
         );
 
         let resources: Vec<_> = manifest.resources().collect();
-        assert_eq!(resources.len(), 7, "Should have 7 resources");
+        assert_eq!(resources.len(), 8, "Should have 8 resources");
         let resource_ids: Vec<_> = resources
             .iter()
             .map(|r| {
@@ -513,18 +513,18 @@ mod tests {
         assert!(resource_ids.contains(&"Exec[/root/${scripts}/yo.sh]".to_string()));
 
         let relations: Vec<_> = manifest.relations().collect();
-        assert_eq!(relations.len(), 4, "Should have 4 relations");
+        assert_eq!(relations.len(), 5, "Should have 5 relations");
 
         let plan = parse_puppet_manifest(&manifest)?;
         assert_eq!(
             plan.plan().inner().node_count(),
-            7,
-            "Plan should have 7 nodes"
+            8,
+            "Plan should have 8 nodes"
         );
         assert_eq!(
             plan.plan().inner().edge_count(),
-            6,
-            "Plan should have 6 edges"
+            7,
+            "Plan should have 7 edges"
         );
 
         Ok(())
@@ -567,6 +567,20 @@ mod tests {
         "#;
         let manifest = Manifest::from_str(input)?;
         assert_eq!(manifest.0.len(), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_single_ref_ref_list() -> Result<()> {
+        let input = r#"
+        service { "nginx": }
+        file { "/tmp/one": }
+        [Service["nginx"]] -> File["/tmp/one"]
+    "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(manifest.0.len(), 3); // 2 resources, 1 relations
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(plan.plan().inner().node_count(), 2);
         Ok(())
     }
 }

@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         print!("{}", node.id());
         for edge in edges {
             print!(
-                " ({}> {})",
+                " ({} {})",
                 edge.weight(),
                 plan.sorted_weights()?.get(&edge.target()).unwrap().id()
             );

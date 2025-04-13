@@ -1,10 +1,12 @@
 pub mod exec;
 pub mod file;
+pub mod foo_bar;
 pub mod resource;
 pub mod service;
 
 pub use exec::Exec;
 pub use file::File;
+pub use foo_bar::FooBar;
 pub use resource::Ensure;
 pub use resource::Relation;
 pub use resource::Resource;
@@ -28,6 +30,12 @@ impl TryFrom<&PuppetExpr> for Box<dyn Resource> {
                 "Service" => Ok(Box::new(Service {
                     title: title.to_string(),
                 })),
+                "Foo::Bar" => {
+                    eprintln!("From PuppetExpr to Foo::Bar");
+                    Ok(Box::new(FooBar {
+                        title: title.to_string(),
+                    }))
+                }
                 no_match => Err(anyhow!("unknown rtype: {no_match}")),
             },
             PuppetExpr::Relation { .. } => {
