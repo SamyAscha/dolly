@@ -1,5 +1,4 @@
 use core::fmt::Debug as FmtDebug;
-use petgraph::{acyclic::Acyclic, prelude::StableDiGraph};
 use std::fmt;
 
 pub trait Resource {
@@ -40,8 +39,4 @@ impl FmtDebug for dyn Resource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.title())
     }
-}
-
-pub struct Plan {
-    pub graph: Acyclic<StableDiGraph<Box<dyn Resource>, Relation>>,
 }

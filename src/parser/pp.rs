@@ -99,8 +99,8 @@ impl fmt::Display for StringContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceRef {
-    rtype: String,
-    title: PuppetString,
+    pub rtype: String,
+    pub title: PuppetString,
 }
 
 impl ResourceRef {
@@ -117,8 +117,8 @@ impl Display for ResourceRef {
 
 #[derive(Debug)]
 pub struct Attribute {
-    name: String,
-    value: PuppetString,
+    pub name: String,
+    pub value: PuppetString,
 }
 
 #[derive(Debug)]

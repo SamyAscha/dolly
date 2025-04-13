@@ -6,7 +6,6 @@ pub mod service;
 pub use exec::Exec;
 pub use file::File;
 pub use resource::Ensure;
-pub use resource::Plan;
 pub use resource::Relation;
 pub use resource::Resource;
 pub use service::Service;

@@ -109,3 +109,416 @@ fn try_add_edges_from_relation(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    // 1. Simple Cases
+    #[test]
+    fn test_empty_manifest() -> Result<()> {
+        let input = "";
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            0,
+            "Empty input should produce empty manifest"
+        );
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            0,
+            "Empty manifest should produce empty graph"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            0,
+            "Empty manifest should have no edges"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_single_file_resource() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one":
+            }
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(manifest.0.len(), 1, "Should have one resource");
+
+        if let Some(PuppetExpr::Resource {
+            rtype,
+            title,
+            attributes,
+        }) = manifest.0.first()
+        {
+            assert_eq!(rtype, "file", "Resource type should be 'file'");
+            assert_eq!(title.to_string(), "/tmp/one", "Title should be '/tmp/one'");
+            assert!(attributes.is_empty(), "Attributes should be empty");
+        } else {
+            return Err(anyhow!("Expected a Resource variant"));
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            1,
+            "Plan should have one node"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            0,
+            "Plan should have no edges"
+        );
+
+        let weights = plan.sorted_weights()?;
+        assert_eq!(weights.len(), 1, "Sorted weights should have one node");
+        if let Some((_, node)) = weights.first() {
+            assert_eq!(node.rtype(), "file", "Node rtype should be 'file'");
+            assert_eq!(node.title(), "/tmp/one", "Node title should be '/tmp/one'");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_single_relation() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one": }
+            service { "nginx": }
+            File["/tmp/one"] -> Service["nginx"]
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            3,
+            "Should have two resources and one relation"
+        );
+
+        let resources: Vec<_> = manifest.resources().collect();
+        assert_eq!(resources.len(), 2, "Should have two resources");
+        if let PuppetExpr::Resource { rtype, title, .. } = resources[0] {
+            assert_eq!(rtype, "file", "First resource is file");
+            assert_eq!(title.to_string(), "/tmp/one");
+        }
+        if let PuppetExpr::Resource { rtype, title, .. } = resources[1] {
+            assert_eq!(rtype, "service", "Second resource is service");
+            assert_eq!(title.to_string(), "nginx");
+        }
+
+        let relations: Vec<_> = manifest.relations().collect();
+        assert_eq!(relations.len(), 1, "Should have one relation");
+        if let PuppetExpr::Relation { from, to, op } = relations[0] {
+            assert_eq!(from.len(), 1, "From should have one ref");
+            assert_eq!(from[0].rtype, "file");
+            assert_eq!(from[0].title.to_string(), "/tmp/one");
+            assert_eq!(to.len(), 1, "To should have one ref");
+            assert_eq!(to[0].rtype, "service");
+            assert_eq!(to[0].title.to_string(), "nginx");
+            assert!(matches!(op, RelationOp::Provide), "Op should be ->");
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            2,
+            "Plan should have two nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            1,
+            "Plan should have one edge"
+        );
+
+        let weights = plan.sorted_weights()?;
+        assert_eq!(weights.len(), 2, "Sorted weights should have two nodes");
+        let titles: Vec<_> = weights.values().map(|node| node.title()).collect();
+        assert!(titles.contains(&"/tmp/one".to_string()));
+        assert!(titles.contains(&"nginx".to_string()));
+
+        Ok(())
+    }
+
+    // 2. Moderate Complexity
+    #[test]
+    fn test_multiple_resources_with_variables() -> Result<()> {
+        let input = r#"
+            file { "/tmp/${var}/test":
+                mode => "0644",
+            }
+            exec { "/root/${script}/run.sh": }
+            service { "nginx": }
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(manifest.0.len(), 3, "Should have three resources");
+
+        let resources: Vec<_> = manifest.resources().collect();
+        assert_eq!(resources.len(), 3, "Should have three resources");
+
+        // File resource
+        if let PuppetExpr::Resource {
+            rtype,
+            title,
+            attributes,
+        } = resources[0]
+        {
+            assert_eq!(rtype, "file");
+            assert_eq!(title.to_string(), "/tmp/${var}/test");
+            assert_eq!(attributes.len(), 1, "Should have one attribute");
+            assert_eq!(attributes[0].name, "mode");
+            assert_eq!(attributes[0].value.to_string(), "0644");
+        }
+
+        // Exec resource
+        if let PuppetExpr::Resource {
+            rtype,
+            title,
+            attributes,
+        } = resources[1]
+        {
+            assert_eq!(rtype, "exec");
+            assert_eq!(title.to_string(), "/root/${script}/run.sh");
+            assert!(attributes.is_empty());
+        }
+
+        // Service resource
+        if let PuppetExpr::Resource {
+            rtype,
+            title,
+            attributes,
+        } = resources[2]
+        {
+            assert_eq!(rtype, "service");
+            assert_eq!(title.to_string(), "nginx");
+            assert!(attributes.is_empty());
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            3,
+            "Plan should have three nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            0,
+            "Plan should have no edges"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_chained_relations() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one": }
+            file { "/tmp/two": }
+            service { "nginx": }
+            File["/tmp/one"] -> File["/tmp/two"] ~> Service["nginx"]
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            5,
+            "Should have three resources and two relations"
+        );
+
+        let relations: Vec<_> = manifest.relations().collect();
+        assert_eq!(relations.len(), 2, "Should have two relations");
+
+        // First relation: File["/tmp/one"] -> File["/tmp/two"]
+        if let PuppetExpr::Relation { from, to, op } = relations[0] {
+            assert_eq!(from[0].id(), "file[/tmp/one]");
+            assert_eq!(to[0].id(), "file[/tmp/two]");
+            assert!(matches!(op, RelationOp::Provide));
+        }
+
+        // Second relation: File["/tmp/two"] ~> Service["nginx"]
+        if let PuppetExpr::Relation { from, to, op } = relations[1] {
+            assert_eq!(from[0].id(), "file[/tmp/two]");
+            assert_eq!(to[0].id(), "service[nginx]");
+            assert!(matches!(op, RelationOp::Notify));
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            3,
+            "Plan should have three nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            2,
+            "Plan should have two edges"
+        );
+
+        let weights = plan.sorted_weights()?;
+        assert_eq!(weights.len(), 3, "Sorted weights should have three nodes");
+        let titles: Vec<_> = weights.values().map(|node| node.id()).collect();
+        assert!(titles.contains(&"file[/tmp/one]".to_string()));
+        assert!(titles.contains(&"file[/tmp/two]".to_string()));
+        assert!(titles.contains(&"service[nginx]".to_string()));
+
+        Ok(())
+    }
+
+    // 3. Edge Cases
+    #[test]
+    fn test_undefined_resource_reference() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one": }
+            File["/tmp/missing"] -> Service["nginx"]
+        "#;
+        let manifest = Manifest::from_str(input);
+        assert!(manifest.is_err(), "Should fail due to undefined resource");
+        if let Err(e) = manifest {
+            assert!(
+                e.to_string().contains("Undefined resource reference"),
+                "Error should mention undefined reference"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_quoted_string() -> Result<()> {
+        let input = r#"
+            file { "":
+            }
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(manifest.0.len(), 1, "Should have one resource");
+        if let PuppetExpr::Resource { rtype, title, .. } = &manifest.0[0] {
+            assert_eq!(rtype, "file");
+            assert_eq!(title.to_string(), "");
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            1,
+            "Plan should have one node"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            0,
+            "Plan should have no edges"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_whitespace_variations() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one" : } service { "nginx" : } File [ "/tmp/one" ] -> Service [ "nginx" ]
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            3,
+            "Should have two resources and one relation"
+        );
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            2,
+            "Plan should have two nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            1,
+            "Plan should have one edge"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_reverse_relations() -> Result<()> {
+        let input = r#"
+            file { "/tmp/one": }
+            service { "ssh": }
+            Service["ssh"] <~ File["/tmp/one"]
+        "#;
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            3,
+            "Should have two resources and one relation"
+        );
+
+        let relations: Vec<_> = manifest.relations().collect();
+        assert_eq!(relations.len(), 1, "Should have one relation");
+        if let PuppetExpr::Relation { from, to, op } = relations[0] {
+            assert_eq!(from[0].id(), "service[ssh]");
+            assert_eq!(to[0].id(), "file[/tmp/one]");
+            assert!(matches!(op, RelationOp::Subscribe));
+        }
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            2,
+            "Plan should have two nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            1,
+            "Plan should have one edge"
+        );
+
+        let weights = plan.sorted_weights()?;
+        assert_eq!(weights.len(), 2, "Sorted weights should have two nodes");
+        Ok(())
+    }
+
+    #[test]
+    fn test_complex_test_pp() -> Result<()> {
+        let input = include_str!("../res/test.pp");
+        let manifest = Manifest::from_str(input)?;
+        assert_eq!(
+            manifest.0.len(),
+            10,
+            "Should have 7 resources and 3 relations"
+        );
+
+        let resources: Vec<_> = manifest.resources().collect();
+        assert_eq!(resources.len(), 7, "Should have 7 resources");
+        let resource_ids: Vec<_> = resources
+            .iter()
+            .map(|r| {
+                if let PuppetExpr::Resource { rtype, title, .. } = r {
+                    format!("{}[{}]", rtype, title)
+                } else {
+                    unreachable!()
+                }
+            })
+            .collect();
+        assert!(resource_ids.contains(&"file[/tmp/one]".to_string()));
+        assert!(resource_ids.contains(&"file[/tmp/two]".to_string()));
+        assert!(resource_ids.contains(&"file[/tmp/two/three]".to_string()));
+        assert!(resource_ids.contains(&"file[/tmp/two/four]".to_string()));
+        assert!(resource_ids.contains(&"service[nginx]".to_string()));
+        assert!(resource_ids.contains(&"service[ssh]".to_string()));
+        assert!(resource_ids.contains(&"exec[/root/${scripts}/yo.sh]".to_string()));
+
+        let relations: Vec<_> = manifest.relations().collect();
+        assert_eq!(relations.len(), 3, "Should have 3 relations");
+
+        let plan = parse_puppet_manifest(&manifest)?;
+        assert_eq!(
+            plan.plan().inner().node_count(),
+            7,
+            "Plan should have 7 nodes"
+        );
+        assert_eq!(
+            plan.plan().inner().edge_count(),
+            5,
+            "Plan should have 5 edges"
+        );
+
+        Ok(())
+    }
+}
