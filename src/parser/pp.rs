@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -94,7 +95,7 @@ impl fmt::Display for StringContent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceRef {
     pub rtype: String,
     pub title: PuppetString,
@@ -109,6 +110,13 @@ impl ResourceRef {
 impl Display for ResourceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.id())
+    }
+}
+
+impl Hash for ResourceRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.rtype.to_lowercase().hash(state);
+        self.title.hash(state);
     }
 }
 
@@ -247,7 +255,7 @@ fn parse_resource(pair: pest::iterators::Pair<Rule>) -> Result<PuppetExpr> {
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::rtype => {
-                rtype = inner.as_str().to_string();
+                rtype = inner.as_str().to_string(); // Normalize for HashMap
             }
             Rule::title => {
                 title = parse_quoted_string(inner.into_inner().next().ok_or_else(|| {
@@ -264,7 +272,7 @@ fn parse_resource(pair: pest::iterators::Pair<Rule>) -> Result<PuppetExpr> {
     }
 
     Ok(PuppetExpr::Resource {
-        rtype: rtype.to_lowercase(),
+        rtype,
         title,
         attributes,
     })

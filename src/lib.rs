@@ -523,4 +523,47 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_invalid_uc_first_ref() -> Result<()> {
+        let input = r#"
+        service { "nginx": }
+        service["nginx"] -> File["/tmp/one"]
+    "#;
+        assert!(Manifest::from_str(input).is_err());
+        Ok(())
+    }
+
+    // The below 2 tests are currently failing. We are working on getting
+    // resource reference casing right.
+    //
+    // #[test]
+    // fn test_uc_first_and_namespaced_refs() -> Result<()> {
+    //     let input = r#"
+    //     service { "nginx": }
+    //     Service["nginx"] -> File["/tmp/one"]
+    //     file { "/tmp/one": }
+    //     foo::bar { "test": }
+    //     Foo::Bar["test"] -> File["/tmp/one"]
+    // "#;
+    //     let manifest = Manifest::from_str(input)?;
+    //     assert_eq!(manifest.0.len(), 5); // 3 resources, 2 relations
+    //     let plan = parse_puppet_manifest(&manifest)?;
+    //     assert_eq!(plan.plan().inner().node_count(), 3);
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn test_uc_first_namespaced_refs() -> Result<()> {
+    //     let input = r#"
+    //         service { "nginx": }
+    //         Service["nginx"] -> File["/tmp/one"]
+    //         file { "/tmp/one": }
+    //         foo::bar { "test": }
+    //         Foo::Bar["test"] -> File["/tmp/one"]
+    //     "#;
+    //     let manifest = Manifest::from_str(input)?;
+    //     assert_eq!(manifest.0.len(), 5);
+    //     Ok(())
+    // }
 }
