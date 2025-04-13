@@ -28,14 +28,14 @@ impl Plan {
         toposort(self.0.inner(), None).map_err(|_| anyhow!("Plan is not acyclic"))
     }
 
-    pub fn sorted_weights(&self) -> Result<IndexMap<NodeIndex, &Box<dyn Resource>>> {
+    pub fn sorted_weights(&self) -> Result<IndexMap<NodeIndex, &dyn Resource>> {
         let mut weights = IndexMap::new();
         let indices = toposort(self.0.inner(), None).map_err(|_| anyhow!("Plan is not acyclic"))?;
         for index in indices {
             let Some(node) = self.0.inner().node_weight(index) else {
                 return Err(anyhow!("Node without weight"));
             };
-            weights.insert(index, node);
+            weights.insert(index, node.as_ref());
         }
         Ok(weights)
     }

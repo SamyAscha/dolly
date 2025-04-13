@@ -41,7 +41,7 @@ impl FromStr for RelationOp {
             "<-" => Ok(Self::Require),
             "~>" => Ok(Self::Notify),
             "<~" => Ok(Self::Subscribe),
-            bad => Err(anyhow!("Invalid relation operator: {}", bad)),
+            bad => Err(anyhow!("Invalid relation operator: {bad}")),
         }
     }
 }
@@ -219,8 +219,8 @@ impl FromStr for Manifest {
                     let expr = parse_resource(pair)?;
                     if let PuppetExpr::Resource { rtype, title, .. } = &expr {
                         let resource_ref = ResourceRef {
-                            rtype: rtype.to_lowercase(),
-                            title: title.clone(),
+                            rtype: rtype.clone(),
+                            title: PuppetString(title.0.clone()),
                         };
                         resources.insert(resource_ref, ());
                     }
