@@ -19,13 +19,13 @@ impl TryFrom<&PuppetExpr> for Box<dyn Resource> {
     fn try_from(expr: &PuppetExpr) -> Result<Self> {
         match expr {
             PuppetExpr::Resource { rtype, title, .. } => match rtype.as_str() {
-                "file" => Ok(Box::new(File {
+                "File" => Ok(Box::new(File {
                     title: title.to_string(),
                 })),
-                "exec" => Ok(Box::new(Exec {
+                "Exec" => Ok(Box::new(Exec {
                     title: title.to_string(),
                 })),
-                "service" => Ok(Box::new(Service {
+                "Service" => Ok(Box::new(Service {
                     title: title.to_string(),
                 })),
                 no_match => Err(anyhow!("unknown rtype: {no_match}")),

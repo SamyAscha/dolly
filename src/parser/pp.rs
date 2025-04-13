@@ -115,8 +115,7 @@ impl Display for ResourceRef {
 
 impl Hash for ResourceRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.rtype.to_lowercase().hash(state);
-        self.title.hash(state);
+        self.id().hash(state);
     }
 }
 
@@ -228,7 +227,7 @@ impl FromStr for Manifest {
                     let expr = parse_resource(pair)?;
                     if let PuppetExpr::Resource { rtype, title, .. } = &expr {
                         let resource_ref = ResourceRef {
-                            rtype: rtype.clone(),
+                            rtype: to_uc_first(rtype),
                             title: PuppetString(title.0.clone()),
                         };
                         resources.insert(resource_ref, ());
@@ -255,7 +254,7 @@ fn parse_resource(pair: pest::iterators::Pair<Rule>) -> Result<PuppetExpr> {
     for inner in pair.into_inner() {
         match inner.as_rule() {
             Rule::rtype => {
-                rtype = inner.as_str().to_string(); // Normalize for HashMap
+                rtype = to_uc_first(inner.as_str());
             }
             Rule::title => {
                 title = parse_quoted_string(inner.into_inner().next().ok_or_else(|| {
@@ -373,8 +372,8 @@ fn parse_resource_ref(pair: pest::iterators::Pair<Rule>) -> Result<ResourceRef> 
     let mut title = PuppetString::new();
     for inner in pair.into_inner() {
         match inner.as_rule() {
-            Rule::rtype => {
-                rtype = inner.as_str().to_lowercase();
+            Rule::ref_rtype => {
+                rtype = inner.as_str().to_string();
             }
             Rule::quoted_string => {
                 title = parse_quoted_string(inner)?;
@@ -392,12 +391,10 @@ fn validate_references(
     for expr in expressions {
         if let PuppetExpr::Relation { from, to, .. } = expr {
             for r in from.iter().chain(to.iter()) {
+                eprintln!("Key: {r:#?}");
                 if !resources.contains_key(r) {
                     return Err(anyhow!(PuppetError {
-                        message: format!(
-                            "Undefined resource reference: {}['{}']",
-                            r.rtype, r.title
-                        ),
+                        message: format!("Undefined resource reference: {}", r.id()),
                     }));
                 }
             }
@@ -442,4 +439,17 @@ fn parse_quoted_string(pair: pest::iterators::Pair<Rule>) -> Result<PuppetString
         }
     }
     Ok(PuppetString(content))
+}
+
+fn to_uc_first(s: &str) -> String {
+    s.split("::")
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("::")
 }

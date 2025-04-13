@@ -16,7 +16,7 @@ impl File {
 
 impl Resource for File {
     fn rtype(&self) -> &str {
-        "file"
+        "File"
     }
 
     fn title(&self) -> String {

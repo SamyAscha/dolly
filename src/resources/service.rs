@@ -16,7 +16,7 @@ impl Service {
 
 impl Resource for Service {
     fn rtype(&self) -> &str {
-        "service"
+        "Service"
     }
 
     fn title(&self) -> String {

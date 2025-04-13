@@ -16,7 +16,7 @@ impl Exec {
 
 impl Resource for Exec {
     fn rtype(&self) -> &str {
-        "exec"
+        "Exec"
     }
 
     fn title(&self) -> String {

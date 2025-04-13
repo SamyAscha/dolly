@@ -1,8 +1,12 @@
 program = { SOI ~ (resource | relation)* ~ WHITESPACE* ~ EOI }
 resource = { rtype ~ "{" ~ title ~ ":" ~ attributes? ~ WHITESPACE* ~ "}" }
+resource_ref = { ref_rtype ~ "[" ~ quoted_string ~ "]" }
 rtype = { ident | namespaced_ident }
+ref_rtype = { uc_ident | uc_namespaced_ident }
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+uc_ident = { ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
 namespaced_ident = { ident ~ ("::" ~ ident)+ }
+uc_namespaced_ident = { uc_ident ~ ("::" ~ uc_ident)+ }
 title = { quoted_string }
 attributes = { attribute ~ ("," ~ attribute)* ~ ","? }
 attribute = { attr_name ~ "=>" ~ attr_value }
@@ -11,7 +15,6 @@ attr_value = { quoted_string | ident }
 relation = { ref_arg ~ WHITESPACE* ~ rel_op ~ WHITESPACE* ~ ref_arg ~ (WHITESPACE* ~ rel_op ~ WHITESPACE* ~ ref_arg)* }
 ref_arg = { ref_list | resource_ref }
 ref_list = { "[" ~ resource_ref ~ ("," ~ resource_ref)+ ~ "]" }
-resource_ref = { rtype ~ "[" ~ quoted_string ~ "]" }
 rel_op = { "->" | "~>" | "<-" | "<~" }
 quoted_string = { single_quoted | double_quoted }
 single_quoted = { "'" ~ (!"'" ~ ANY)* ~ "'" }
