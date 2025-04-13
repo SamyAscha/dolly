@@ -41,11 +41,7 @@ impl FromStr for RelationOp {
             "<-" => Ok(Self::Require),
             "~>" => Ok(Self::Notify),
             "<~" => Ok(Self::Subscribe),
-            bad => {
-                unreachable!(
-                    "RelationOp:from_str() should never get an unknown 'arrow' str: {bad}. Check the parser."
-                )
-            }
+            bad => Err(anyhow!("Invalid relation operator: {}", bad)),
         }
     }
 }
@@ -132,6 +128,8 @@ impl fmt::Display for PuppetError {
     }
 }
 
+impl Error for PuppetError {}
+
 #[derive(Debug)]
 pub struct Manifest(pub Vec<PuppetExpr>);
 
@@ -157,234 +155,6 @@ impl Display for Manifest {
         Ok(())
     }
 }
-
-impl FromStr for Manifest {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut pairs = PuppetParser::parse(Rule::program, s)?;
-
-        let mut expressions = Vec::new();
-        let mut resources = HashMap::new();
-
-        let Some(program) = pairs.next() else {
-            return Err(anyhow!(PuppetError {
-                message: "No program pair".to_owned()
-            }));
-        };
-
-        for pair in program.into_inner() {
-            match pair.as_rule() {
-                Rule::resource => {
-                    let mut rtype = String::new();
-                    let mut title = PuppetString::new();
-                    let mut attributes = Vec::new();
-
-                    for inner in pair.into_inner() {
-                        match inner.as_rule() {
-                            Rule::rtype => {
-                                rtype = inner.as_str().to_string();
-                            }
-                            Rule::title => {
-                                for tp in inner.into_inner() {
-                                    match tp.as_rule() {
-                                        Rule::quoted_string => {
-                                            title = parse_quoted_string(tp)?;
-                                        }
-                                        no_match => {
-                                            println!("Nothing matches on: {no_match:#?}");
-                                        }
-                                    }
-                                }
-                            }
-                            Rule::attributes => {
-                                let mut attr_name = String::new();
-                                let mut attr_value = PuppetString::new();
-                                for attr_pair in inner.into_inner() {
-                                    match attr_pair.as_rule() {
-                                        Rule::attribute => {
-                                            for ap in attr_pair.into_inner() {
-                                                match ap.as_rule() {
-                                                    Rule::attr_name => {
-                                                        attr_name = ap.as_str().to_string();
-                                                    }
-                                                    Rule::attr_value => {
-                                                        for avp in ap.into_inner() {
-                                                            match avp.as_rule() {
-                                                                Rule::quoted_string => {
-                                                                    attr_value =
-                                                                        parse_quoted_string(avp)?;
-                                                                }
-                                                                no_match => {
-                                                                    println!(
-                                                                        "Nothing matches on: {no_match:#?}"
-                                                                    );
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    no_match => {
-                                                        println!(
-                                                            "Nothing matches on: {no_match:#?}"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        no_match => {
-                                            println!("Nothing matches on: {no_match:#?}");
-                                        }
-                                    }
-                                }
-                                attributes.push(Attribute {
-                                    name: attr_name,
-                                    value: attr_value,
-                                });
-                            }
-                            no_match => {
-                                println!("Nothing matches on: {no_match:#?}");
-                            }
-                        }
-                    }
-                    let resource_ref = ResourceRef {
-                        rtype: rtype.to_lowercase(),
-                        title: title.clone(),
-                    };
-                    resources.insert(resource_ref, ());
-                    expressions.push(PuppetExpr::Resource {
-                        rtype: rtype.to_lowercase(),
-                        title,
-                        attributes,
-                    });
-                }
-                Rule::relation => {
-                    let mut relation_parts = Vec::new();
-                    let mut current_refs = Vec::new();
-
-                    for inner in pair.into_inner() {
-                        match inner.as_rule() {
-                            Rule::ref_arg => {
-                                for rl_rr in inner.into_inner() {
-                                    match rl_rr.as_rule() {
-                                        Rule::resource_ref => {
-                                            let mut ref_rtype = String::new();
-                                            let mut ref_title = PuppetString::new();
-                                            for ref_inner in rl_rr.into_inner() {
-                                                match ref_inner.as_rule() {
-                                                    Rule::rtype => {
-                                                        ref_rtype =
-                                                            ref_inner.as_str().to_lowercase();
-                                                    }
-                                                    Rule::quoted_string => {
-                                                        ref_title = parse_quoted_string(ref_inner)?;
-                                                    }
-                                                    no_match => {
-                                                        println!(
-                                                            "ref_list: Nothing matches on: {no_match:#?}"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            current_refs.push(ResourceRef {
-                                                rtype: ref_rtype,
-                                                title: ref_title,
-                                            });
-                                        }
-                                        Rule::ref_list => {
-                                            let mut refs = Vec::new();
-                                            for ref_pair in rl_rr.into_inner() {
-                                                if ref_pair.as_rule() == Rule::resource_ref {
-                                                    let mut ref_rtype = String::new();
-                                                    let mut ref_title = PuppetString::new();
-                                                    for ref_inner in ref_pair.into_inner() {
-                                                        match ref_inner.as_rule() {
-                                                            Rule::rtype => {
-                                                                ref_rtype = ref_inner
-                                                                    .as_str()
-                                                                    .to_lowercase();
-                                                            }
-                                                            Rule::quoted_string => {
-                                                                ref_title =
-                                                                    parse_quoted_string(ref_inner)?;
-                                                            }
-                                                            no_match => {
-                                                                println!(
-                                                                    "ref_list: Nothing matches on: {no_match:#?}"
-                                                                );
-                                                            }
-                                                        }
-                                                    }
-                                                    refs.push(ResourceRef {
-                                                        rtype: ref_rtype,
-                                                        title: ref_title,
-                                                    });
-                                                }
-                                            }
-                                            current_refs = refs;
-                                        }
-                                        no_match => {
-                                            println!("rel_op: Nothing matches on: {no_match:#?}");
-                                        }
-                                    }
-                                }
-                            }
-                            Rule::rel_op => {
-                                if !current_refs.is_empty() {
-                                    relation_parts
-                                        .push((current_refs.clone(), inner.as_str().to_string()));
-                                    current_refs = Vec::new();
-                                }
-                            }
-                            no_match => {
-                                println!("rel_op: Nothing matches on: {no_match:#?}");
-                            }
-                        }
-                    }
-
-                    // Add the final ref_arg
-                    if !current_refs.is_empty() {
-                        relation_parts.push((current_refs.clone(), "".to_string())); // Dummy op for last refs
-                    }
-
-                    // Create relations from consecutive ref_args
-                    for i in 0..relation_parts.len().saturating_sub(1) {
-                        let (from, op_str) = &relation_parts[i];
-                        let (to, _) = &relation_parts[i + 1];
-                        if !op_str.is_empty() {
-                            expressions.push(PuppetExpr::Relation {
-                                from: from.clone(),
-                                to: to.clone(),
-                                op: op_str.parse()?,
-                            });
-                        }
-                    }
-                }
-                no_match => {
-                    println!("Nothing matches on: {no_match:#?}");
-                }
-            }
-        }
-
-        // Second pass: Validate references
-        for expr in &expressions {
-            if let PuppetExpr::Relation { from, to, .. } = expr {
-                for r in from.iter().chain(to.iter()) {
-                    if !resources.contains_key(r) {
-                        return Err(anyhow!(PuppetError {
-                            message: format!(
-                                "Undefined resource reference: {}['{}']",
-                                r.rtype, r.title
-                            ),
-                        }));
-                    }
-                }
-            }
-        }
-        Ok(Manifest(expressions))
-    }
-}
-
-impl Error for PuppetError {}
 
 impl fmt::Display for PuppetExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -429,6 +199,204 @@ impl fmt::Display for PuppetExpr {
     }
 }
 
+impl FromStr for Manifest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = PuppetParser::parse(Rule::program, s)?;
+        let mut expressions = Vec::new();
+        let mut resources = HashMap::new();
+
+        let Some(program) = pairs.next() else {
+            return Err(anyhow!(PuppetError {
+                message: "No program pair".to_owned()
+            }));
+        };
+
+        for pair in program.into_inner() {
+            match pair.as_rule() {
+                Rule::resource => {
+                    let expr = parse_resource(pair)?;
+                    if let PuppetExpr::Resource { rtype, title, .. } = &expr {
+                        let resource_ref = ResourceRef {
+                            rtype: rtype.to_lowercase(),
+                            title: title.clone(),
+                        };
+                        resources.insert(resource_ref, ());
+                    }
+                    expressions.push(expr);
+                }
+                Rule::relation => {
+                    expressions.extend(parse_relation(pair)?);
+                }
+                _ => {} // Silently ignore unknown rules (e.g., EOI)
+            }
+        }
+
+        validate_references(&expressions, &resources)?;
+        Ok(Manifest(expressions))
+    }
+}
+
+fn parse_resource(pair: pest::iterators::Pair<Rule>) -> Result<PuppetExpr> {
+    let mut rtype = String::new();
+    let mut title = PuppetString::new();
+    let mut attributes = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::rtype => {
+                rtype = inner.as_str().to_string();
+            }
+            Rule::title => {
+                title = parse_quoted_string(inner.into_inner().next().ok_or_else(|| {
+                    anyhow!(PuppetError {
+                        message: "Missing title".to_string()
+                    })
+                })?)?;
+            }
+            Rule::attributes => {
+                attributes = parse_attributes(inner)?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(PuppetExpr::Resource {
+        rtype: rtype.to_lowercase(),
+        title,
+        attributes,
+    })
+}
+
+fn parse_attributes(pair: pest::iterators::Pair<Rule>) -> Result<Vec<Attribute>> {
+    let mut attributes = Vec::new();
+    for attr_pair in pair.into_inner() {
+        if attr_pair.as_rule() == Rule::attribute {
+            let mut attr_name = String::new();
+            let mut attr_value = PuppetString::new();
+            for ap in attr_pair.into_inner() {
+                match ap.as_rule() {
+                    Rule::attr_name => {
+                        attr_name = ap.as_str().to_string();
+                    }
+                    Rule::attr_value => {
+                        attr_value =
+                            parse_quoted_string(ap.into_inner().next().ok_or_else(|| {
+                                anyhow!(PuppetError {
+                                    message: "Missing attribute value".to_string()
+                                })
+                            })?)?;
+                    }
+                    _ => {}
+                }
+            }
+            attributes.push(Attribute {
+                name: attr_name,
+                value: attr_value,
+            });
+        }
+    }
+    Ok(attributes)
+}
+
+fn parse_relation(pair: pest::iterators::Pair<Rule>) -> Result<Vec<PuppetExpr>> {
+    let mut relation_parts = Vec::new();
+    let mut current_refs = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ref_arg => {
+                current_refs = parse_ref_arg(inner)?;
+            }
+            Rule::rel_op => {
+                if !current_refs.is_empty() {
+                    relation_parts.push((current_refs.clone(), inner.as_str().to_string()));
+                    current_refs = Vec::new();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !current_refs.is_empty() {
+        relation_parts.push((current_refs, "".to_string()));
+    }
+
+    let mut expressions = Vec::new();
+    for i in 0..relation_parts.len().saturating_sub(1) {
+        let (from, op_str) = &relation_parts[i];
+        let (to, _) = &relation_parts[i + 1];
+        if !op_str.is_empty() {
+            expressions.push(PuppetExpr::Relation {
+                from: from.clone(),
+                to: to.clone(),
+                op: op_str.parse()?,
+            });
+        }
+    }
+
+    Ok(expressions)
+}
+
+fn parse_ref_arg(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ResourceRef>> {
+    let mut refs = Vec::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::resource_ref => {
+                refs.push(parse_resource_ref(inner)?);
+            }
+            Rule::ref_list => {
+                for ref_pair in inner.into_inner() {
+                    if ref_pair.as_rule() == Rule::resource_ref {
+                        refs.push(parse_resource_ref(ref_pair)?);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(refs)
+}
+
+fn parse_resource_ref(pair: pest::iterators::Pair<Rule>) -> Result<ResourceRef> {
+    let mut rtype = String::new();
+    let mut title = PuppetString::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::rtype => {
+                rtype = inner.as_str().to_lowercase();
+            }
+            Rule::quoted_string => {
+                title = parse_quoted_string(inner)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(ResourceRef { rtype, title })
+}
+
+fn validate_references(
+    expressions: &[PuppetExpr],
+    resources: &HashMap<ResourceRef, ()>,
+) -> Result<()> {
+    for expr in expressions {
+        if let PuppetExpr::Relation { from, to, .. } = expr {
+            for r in from.iter().chain(to.iter()) {
+                if !resources.contains_key(r) {
+                    return Err(anyhow!(PuppetError {
+                        message: format!(
+                            "Undefined resource reference: {}['{}']",
+                            r.rtype, r.title
+                        ),
+                    }));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn parse_quoted_string(pair: pest::iterators::Pair<Rule>) -> Result<PuppetString> {
     let mut content = Vec::new();
     for inner in pair.into_inner() {
@@ -440,36 +408,28 @@ fn parse_quoted_string(pair: pest::iterators::Pair<Rule>) -> Result<PuppetString
             }
             Rule::double_quoted => {
                 for content_pair in inner.into_inner() {
-                    match content_pair.as_rule() {
-                        Rule::double_quoted_content => {
-                            for inner_content in content_pair.into_inner() {
-                                match inner_content.as_rule() {
-                                    Rule::variable => {
-                                        let var = inner_content.into_inner().next().unwrap();
-                                        content.push(StringContent::Variable(
-                                            var.as_str().to_string(),
-                                        ));
-                                    }
-                                    Rule::plain => {
-                                        content.push(StringContent::Literal(
-                                            inner_content.as_str().to_string(),
-                                        ));
-                                    }
-                                    no_match => {
-                                        println!("Nothing matches on: {no_match:#?}");
-                                    }
+                    if content_pair.as_rule() == Rule::double_quoted_content {
+                        for inner_content in content_pair.into_inner() {
+                            match inner_content.as_rule() {
+                                Rule::variable => {
+                                    let var = inner_content
+                                        .into_inner()
+                                        .next()
+                                        .ok_or_else(|| anyhow!("Missing variable name"))?;
+                                    content.push(StringContent::Variable(var.as_str().to_string()));
                                 }
+                                Rule::plain => {
+                                    content.push(StringContent::Literal(
+                                        inner_content.as_str().to_string(),
+                                    ));
+                                }
+                                _ => {}
                             }
-                        }
-                        no_match => {
-                            println!("Nothing matches on: {no_match:#?}");
                         }
                     }
                 }
             }
-            no_match => {
-                println!("Nothing matches on: {no_match:#?}");
-            }
+            _ => {}
         }
     }
     Ok(PuppetString(content))
