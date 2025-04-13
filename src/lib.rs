@@ -2,7 +2,12 @@ use anyhow::{Result, anyhow};
 use indexmap::IndexMap;
 use parser::pp::{Manifest, PuppetExpr, RelationOp, ResourceRef};
 use petgraph::{
-    acyclic::Acyclic, algo::toposort, dot::Dot, graph::NodeIndex, prelude::StableDiGraph,
+    acyclic::Acyclic,
+    algo::toposort,
+    dot::{Config, Dot},
+    graph::NodeIndex,
+    prelude::StableDiGraph,
+    visit::NodeRef,
 };
 use resources::{Relation, Resource};
 use std::collections::HashMap;
@@ -21,7 +26,13 @@ impl Plan {
     }
 
     pub fn dot(&self) -> petgraph::dot::Dot<'_, &Unchecked> {
-        Dot::new(self.0.inner())
+        let g = self.0.inner();
+        Dot::with_attr_getters(
+            g,
+            &[Config::NodeNoLabel, Config::EdgeNoLabel],
+            &|_g, edge| format!("label = \"{:?}\"", edge.weight()),
+            &|_g, node| format!("label = \"{}\"", node.weight().id()),
+        )
     }
 
     pub fn sorted(&self) -> Result<Vec<NodeIndex>> {
